@@ -1,4 +1,5 @@
-Result/
 __pycache__/
 .pyc
 .ipynb_checkpoints/
+Checkpoint/
+glove/

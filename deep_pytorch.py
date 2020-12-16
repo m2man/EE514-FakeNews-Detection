@@ -10,18 +10,19 @@ from myfunctions import calculate_metric
 
 class EncodingDataset(Dataset):
     # Generate image sgg dataset for the retrieval stage
-    def __init__(self, df):
-        self.df = df
-            
+    def __init__(self, npa, lbl):
+        self.npa = npa
+        self.lbl = lbl
+        
     def __getitem__(self, i):
-        sample = self.df.iloc[i,1:].to_numpy()
-        label = self.df.iloc[i,0]
+        sample = self.npa[i,:]
+        label = self.lbl[i]
         sample = torch.FloatTensor(sample)
         label = torch.FloatTensor([label])
         return sample, label
         
     def __len__(self):
-        return(len(self.df))
+        return(self.npa.shape[0])
 
 def make_dalaloader(dataset, batch_size=16, pin_memory=True, num_workers=0):
     dataloader = DataLoader(dataset, batch_size=batch_size, pin_memory=pin_memory, num_workers=num_workers)
@@ -79,7 +80,7 @@ class MLP(nn.Module):
         return x
     
 class ModelMLP():
-    def __init__(self, datasetTrain, datasetVal=None, batch_size=512, optimizer_choice='adam', init_lr=0.001, layers=[100,1], weight_decay=1e-5, dropout=None, batchnorm=True, checkpoint=None):
+    def __init__(self, datasetTrain, datasetVal=None, batch_size=512, optimizer_choice='adam', init_lr=0.001, layers=[100,1], weight_decay=1e-5, dropout=None, batchnorm=True, checkpoint=None, model_name=''):
         super(ModelMLP, self).__init__()
         '''
         layers include input - hidden - output
@@ -109,6 +110,7 @@ class ModelMLP():
                                        weight_decay=weight_decay)
             
         self.checkpoint = checkpoint
+        self.model_name = model_name
         
     # ---------- LOAD TRAINED MODEL ---------
     def load_trained_model(self):
@@ -175,7 +177,7 @@ class ModelMLP():
                 torch.save({'epoch': epochID, \
                             'model_state_dict': self.model.state_dict(), \
                             'optimizer_state_dict': self.optimizer.state_dict(), \
-                            'best_loss': lossMIN, 'best_acc': accMax}, f"MLP-{self.timestampLaunch}.pth.tar")
+                            'best_loss': lossMIN, 'best_acc': accMax}, f"{self.model_name}-{self.timestampLaunch}.pth.tar")
                 
                 info_txt = info_txt + f" [SAVE]"
             else:
@@ -184,7 +186,7 @@ class ModelMLP():
             
             print(info_txt)
             
-            with open(f"MLP-{self.timestampLaunch}-REPORT.log", "a") as f_log:
+            with open(f"{self.model_name}-{self.timestampLaunch}-REPORT.log", "a") as f_log:
                 f_log.write(info_txt)
                 
             if count_change_loss >= 25:
@@ -234,4 +236,22 @@ class ModelMLP():
             outPREDnp = outPRED.cpu().numpy().squeeze()
             metrics = calculate_metric(outGTnp, outPREDnp)
             metrics['loss'] = loss_report/count
+        return metrics
+    
+    def evaluate(self, datald):
+        self.model.eval()
+        with torch.no_grad():
+            outGT = torch.FloatTensor().to(device)
+            outPRED = torch.FloatTensor().to(device)
+            count = 0
+            for batchID, (batch_sample, batch_label) in enumerate(datald):
+                batch_sample = batch_sample.to(device)
+                batch_label = batch_label.to(device)
+                preds = self.model(batch_sample)
+                outGT = torch.cat((outGT, batch_label), 0)
+                outPRED = torch.cat((outPRED, preds), 0)
+                
+            outGTnp = outGT.cpu().numpy().squeeze()
+            outPREDnp = outPRED.cpu().numpy().squeeze()
+            metrics = calculate_metric(outGTnp, outPREDnp)
         return metrics

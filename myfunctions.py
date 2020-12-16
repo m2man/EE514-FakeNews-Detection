@@ -12,7 +12,7 @@ from nltk.stem import WordNetLemmatizer
 list_stopwords = stopwords.words('english')
 porter = PorterStemmer()
 lemmatizer = WordNetLemmatizer()
-discard_symbol = ': ! @ # $ % ^ & * ( ) ; \' [ ] , . / \" - _ ` ~'.split()
+discard_symbol = ': ? ! @ # $ % ^ & * ( ) ; \' [ ] , . / \" - _ ` ~'.split()
 from nltk import pos_tag, word_tokenize, RegexpParser
 chunker = RegexpParser(""" 
                        NP: {<DT>?<JJ>*<NN>}    #To extract Noun Phrases 
@@ -69,7 +69,7 @@ def split_dataframe(data, test_size=0.2, seed=1509):
     X = np.asarray(data['headline'].tolist())
     y = np.asarray(data['is_sarcastic'].tolist())
     
-    splitter=StratifiedShuffleSplit(n_splits=1,random_state=seed, test_size=0.2)
+    splitter=StratifiedShuffleSplit(n_splits=1,random_state=seed, test_size=test_size)
     for train_idx, test_idx in splitter.split(X,y):
         X_train = X[train_idx]
         y_train = y[train_idx]
@@ -292,6 +292,7 @@ def get_depth_syntax_tree(sent):
 
 def most_common_words(sent, numb_words=20):
     words = sent.split()
+    #words = word_tokenize(sent)
     wordCount = Counter(words)
     wordCount = wordCount.most_common()
     if numb_words > len(wordCount) or numb_words < 0:
@@ -309,3 +310,20 @@ def numb_common_words(sent, list_common_words, norm=True):
     if norm:
         count = count / len(sent_s)
     return count
+
+def normalize_data(X, list_mean=[], list_std=[]):
+    nrow, ncol = X.shape
+    if len(list_mean) == 0 or len(list_std) == 0:
+        x_mean = np.asarray(np.mean(X, axis=0))
+        x_std = np.std(X, axis=0)
+        list_mean = list(x_mean)
+        list_std = list(x_std)
+    else:
+        x_mean = np.asarray(list_mean)
+        x_std = np.asarray(list_std)
+    x_mean = x_mean.reshape(1,-1)
+    x_std = x_std.reshape(1, -1)
+    x_mean = np.repeat(x_mean, nrow, axis=0)
+    x_std = np.repeat(x_std, nrow, axis=0)
+    X_norm = (X - x_mean) / x_std
+    return X_norm, list_mean, list_std
